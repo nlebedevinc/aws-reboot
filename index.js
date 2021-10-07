@@ -1,3 +1,5 @@
+#! /usr/bin/env node
+
 const { EC2, ECS } = require('aws-sdk');
 
 const ec2 = new EC2();
@@ -55,11 +57,12 @@ async function getEC2InstancesList(ecsClusterName) {
 }
 
 const init = async () => {
-    const ecsClusterName = process.env.ECS_CLUSTER;
-    const rebootInstancesStep = process.env.INSTANCE_CHUNK || 5;
+    const [,, ...args] = process.argv;
+    const [ecsClusterName, instanceChunk] = args;
+    const rebootInstancesStep = instanceChunk || 5;
 
     if (!ecsClusterName) {
-        throw new Error('Initialization error');
+        throw new Error('Initialization error, please provide a cluster name');
     }
 
     const ec2InstancesList = await getEC2InstancesList(ecsClusterName);
