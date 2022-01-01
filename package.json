@@ -1,18 +1,18 @@
 {
   "name": "aws-reboot",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A simple script allows to instantly reboot AWS EC2 instances",
-  "main": "reboot.js",
+  "main": "bin/reboot.js",
   "files": [
-    "reboot.js"
+    "bin/reboot.js"
   ],
   "bin": {
-    "aws-reboot": "reboot.js"
+    "aws-reboot": "bin/reboot.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "nlebedevme@gmail.com",
+  "author": "Nick Lebedev <nlebedevme@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "aws-sdk": "^2.1002.0"
