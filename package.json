@@ -12,9 +12,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Nick Lebedev <nlebedevme@gmail.com>",
+  "author": "Nikolay Lebedev <nlebedevme@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "aws-sdk": "^2.1002.0"
+    "aws-sdk": "^2.1533.0"
   }
 }
