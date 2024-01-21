@@ -1,21 +1,30 @@
-const { ECSClient, paginateDescribeContainerInstances } = require('@aws-sdk/client-ecs');
-const { EC2Client, RebootInstancesCommand } = require('@aws-sdk/client-ec2');
+#!/usr/bin/env node
 
-const ecs = new ECSClient();
-const ec2 = new EC2Client();
+const { EC2, ECS, config } = require('@aws-sdk/client-ec2');
+const { ECSClient, ListContainerInstancesCommand, DescribeContainerInstancesCommand } = require('@aws-sdk/client-ecs');
+
+process.env.AWS_SDK_LOAD_CONFIG = process.env.AWS_SDK_LOAD_CONFIG || '1';
+if (!process.env.AWS_REGION) {
+    process.env.AWS_REGION = 'us-east-1'
+}
+
+const ec2 = new EC2({});
+const ecs = new ECSClient({});
 
 async function getContainerInstances(clusterName) {
     let nextToken;
-
     const result = new Set();
+
     console.info('Getting information about instances');
+
     do {
         const list = await ecs.send(new ListContainerInstancesCommand({ cluster: clusterName, nextToken }));
+
         if (list.containerInstanceArns && list.containerInstanceArns.length) {
             list.containerInstanceArns.forEach(v => result.add(v));
         }
 
-        nextToken = list.nextToken
+        nextToken = list.nextToken;
 
         console.info(`Container instances found: ${result.size}`);
     } while (nextToken);
@@ -28,9 +37,14 @@ async function getDescribeContainerInstances(cluster, arnList) {
     const chunks = new Array(Math.ceil(arnList.length / 100)).fill().map(_ => arnList.splice(0, 100));
 
     console.info('Getting container instances description');
+
     for (const containerInstances of chunks) {
-        const list = await paginateDescribeContainerInstances({ client: ecs, cluster, containerInstances });
-        results.push(...list.containerInstances);
+        const list = await ecs.send(new DescribeContainerInstancesCommand({
+            cluster,
+            containerInstances,
+        }));
+
+        result.push(...list.containerInstances);
 
         console.info(`Container instances descriptions found: ${result.length}`);
     }
@@ -39,53 +53,57 @@ async function getDescribeContainerInstances(cluster, arnList) {
 }
 
 async function getEC2InstancesList(ecsClusterName) {
-    const containerInstanceArn = await getContainerInstances(ecsClusterName);
-    const descriptions = await getDescribeContainerInstances(ecsClusterName, Array.from(containerInstanceArn));
+    const containerInstancesArn = await getContainerInstances(ecsClusterName);
+    const descriptions = await getDescribeContainerInstances(ecsClusterName, Array.from(containerInstancesArn));
     const result = Array.from(new Set(descriptions.map(v => v.ec2InstanceId)));
 
-    if (result.length !== containerInstanceArn.length) {
-        throw new Error(`Can't get information about ${containerInstanceArn.length - result.length} instances!`);
+    if (result.length === containerInstancesArn.length) {
+        return result;
     }
 
-    return result;
+    throw new Error(`Can't get information about ${containerInstancesArn.length - result.length} instances!`);
 }
 
 const init = async () => {
     const [,, ...args] = process.argv;
     const [ecsClusterName, instanceChunk] = args;
-    const rebootIntancesStep = instanceChunk || 5;
+    const rebootInstancesStep = instanceChunk || 5;
 
     if (!ecsClusterName) {
         throw new Error('Initialization error, please provide a cluster name');
     }
 
-    const ec2InstanceList = await getEC2InstancesList(ecsClusterName);
-    const selectedForRebootCount = ec2InstanceList.length;
+    const ec2InstancesList = await getEC2InstancesList(ecsClusterName);
+    const selectedForRebootCount = ec2InstancesList.length;
 
-    const chunks = new Array(Math.ceil(ec2InstanceList.length / rebootIntancesStep)).fill().map(_ => ec2InstanceList.splice(0, rebootIntancesStep));
+    /**
+     * @type {string[][]}
+     */
+    const chunks = new Array(Math.ceil(ec2InstancesList.length / rebootInstancesStep)).fill().map(_ => ec2InstancesList.splice(0, rebootInstancesStep));
 
     let counter = 0;
     const promises = [];
+
     for (const index in chunks) {
         promises.push(new Promise(resolve => {
             setTimeout(async () => {
                 try {
-                    const instanceIds = chunks[index];
-                    counter += instanceIds.length;
+                    const InstanceIds = chunks[index];
+                    counter += InstanceIds.length;
 
-                    console.info(`[${counter}/${selectedForRebootCount}]\tRebooting instances: ${instanceIds.join(', ')}`);
-                    await ec2.send(new RebootInstancesCommand({ instanceIds }));
+                    console.info(`[${counter}/${selectedForRebootCount}]\tRebooting instances: ${InstanceIds.join(', ')}`);
+                    await ec2.rebootInstances({ InstanceIds });
                 } catch (error) {
-                    console.error(`Can't reboot instances: ${chunks[index].join(', ')}`);
+                    console.error(`Can't reboot instances: ${chunks[index].join(', ')}`, error);
                 } finally {
                     resolve();
                 }
             }, index * 1000 * 90);
-        }))
+        }));
     }
 
     await Promise.all(promises);
     console.info(`Completed rebooting of ${selectedForRebootCount} instances`);
-}
+};
 
 init().catch(error => console.error(error));
