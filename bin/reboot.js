@@ -1,14 +1,10 @@
 #! /usr/bin/env node
 
 const { EC2, ECS, config } = require('aws-sdk');
-const { AWS_SDK_LOAD_CONFIG, AWS_REGION } = process.env;
 
-if (!AWS_REGION) {
+process.env.AWS_SDK_LOAD_CONFIG = process.env.AWS_SDK_LOAD_CONFIG || '1'
+if (!process.env.AWS_REGION) {
     config.update({ region: 'us-east-1' });
-}
-
-if (!AWS_SDK_LOAD_CONFIG) {
-    process.env.AWS_SDK_LOAD_CONFIG = '1'
 }
 
 const ec2 = new EC2();
